@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+import socket
+import sys
+import ssl
+import re
+
+def dopln(k):
+	hlavicka=""
+	obsah=""
+	d=k.split(": ")
+	if len(d)==2:
+		hlavicka=d[0].lower()
+		obsah=d[1].lower()
+	return (hlavicka,obsah)
+
+def getURL(URL):
+	temp=re.match('[a-z]*',URL)
+	typ=temp[0]
+	URL=URL.replace(typ+"://","")
+	temp=re.match('([\w\-\.]+)',URL)
+	hostname=temp[0]
+	path=URL.replace(hostname,"")
+	if path=="":
+		path="/"
+	return (typ,hostname,path)
+
+
+URL=str(sys.argv[1])
+typ,hostname,path=getURL(URL)
+temp1=hostname.split(".")
+if (typ=="http" or typ=="https") and len(temp1)>1:
+	s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+	if typ=="https":
+		s.connect((hostname,443))
+		s=ssl.wrap_socket(s)
+	else:
+		s.connect((hostname,80))
+	while True:
+		f=s.makefile("rwb")
+		f.write(f'GET {path} HTTP/1.1\r\n'.encode("ASCII"))
+		f.write(f'Host: {hostname}\r\n'.encode("ASCII"))
+		f.write(f'Accept-charset: UTF-8\r\n\r\n'.encode("ASCII"))
+		f.flush()
+		line=f.readline().decode("ASCII")
+		d=line.split(" ")
+		status_number=d[1]
+		status_comment=line.replace(d[0] + " " + status_number + " ", "")
+		headre={}
+		line=f.readline().decode("ASCII").strip()
+		while line != "":
+			hlavicka,obsah=dopln(line)
+			headre[hlavicka]=obsah
+			line=f.readline().decode("ASCII").strip()
+		if status_number=="301" or status_number=="302" or status_number=="303" or status_number=="307" or status_number=="308":
+			typ,hostname,path=getURL(headre["location"])
+			f.close()
+		elif status_number=="200":
+			break
+		else:
+			sys.stderr.write(f'{status_number} {status_comment}')
+			f.close()
+			sys.exit(1)
+			break
+	if status_number=="200":
+		for i in headre:
+			if i=="content-length":
+				dlzka=int(headre["content-length"])
+				obsah=f.read(dlzka).decode("ASCII")
+				sys.stdout.buffer.write(obsah)
+				break
+			elif i=="transfer-encoding" and headre[i]=="chunked":
+				while True:
+					dlzka=f.readline()
+					dlzka=int(dlzka,16)
+					obsah=f.read(dlzka)
+					sys.stdout.buffer.write(obsah)
+					if dlzka==0:
+						break
+					f.readline()
+	f.flush()
+	f.close()
+	sys.exit(0)
+else:
+	print("nesprávny URL")
