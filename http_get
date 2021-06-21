@@ -65,7 +65,7 @@ if (typ=="http" or typ=="https") and len(temp1)>1:
 		for i in headre:
 			if i=="content-length":
 				dlzka=int(headre["content-length"])
-				obsah=f.read(dlzka).decode("ASCII")
+				obsah=f.read(dlzka)
 				sys.stdout.buffer.write(obsah)
 				break
 			elif i=="transfer-encoding" and headre[i]=="chunked":
@@ -81,4 +81,4 @@ if (typ=="http" or typ=="https") and len(temp1)>1:
 	f.close()
 	sys.exit(0)
 else:
-	print("nesprávny URL")
+	sys.stderr.write("nesprávny URL")
